@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+  }
+  body {
+    background-color: #faf8f5;
+    color: #374151;
+  }
+}
+
+/* 薬型モチーフの棒グラフ */
+.pill-bar {
+  position: relative;
+  height: 32px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  border: 2px solid #d1d5db;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.pill-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.pill-bar-fill-0   { background: #e5e7eb; }
+.pill-bar-fill-low { background: linear-gradient(90deg, #fde68a, #fbbf24); }
+.pill-bar-fill-mid { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+.pill-bar-fill-done { background: linear-gradient(90deg, #6ee7b7, #10b981); }
+
+/* スクロールバー非表示（日付スライダー） */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* カード共通 */
+.card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 16px;
+}
+
+/* フォーム要素 */
+.input {
+  width: 100%;
+  border: 1.5px solid #d1d5db;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+  background: #fff;
+}
+.input:focus {
+  border-color: #7c5cbf;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  transition: opacity 0.2s, transform 0.1s;
+  cursor: pointer;
+  border: none;
+}
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: #7c5cbf;
+  color: #fff;
+}
+.btn-primary:hover { opacity: 0.88; }
+
+.btn-secondary {
+  background: #f3f0ff;
+  color: #7c5cbf;
+}
+.btn-secondary:hover { opacity: 0.88; }
+
+.btn-danger {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.btn-success {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 4px;
+  display: block;
+}
+
+/* トグルスイッチ */
+.toggle {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  display: inline-block;
+}
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #d1d5db;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle-slider:before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.toggle input:checked + .toggle-slider { background: #7c5cbf; }
+.toggle input:checked + .toggle-slider:before { transform: translateX(22px); }
