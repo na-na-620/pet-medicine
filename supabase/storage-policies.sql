@@ -5,18 +5,22 @@
 -- ===================================================
 
 -- 認証済みユーザーが pet-icons バケットにアップロード可能
-insert into storage.policies (name, bucket_id, operation, definition)
-values
-  ('authenticated users can upload',  'pet-icons', 'INSERT',
-   '(auth.role() = ''authenticated'')'),
-  ('authenticated users can update',  'pet-icons', 'UPDATE',
-   '(auth.role() = ''authenticated'')'),
-  ('public can view pet icons',       'pet-icons', 'SELECT',
-   'true');
+create policy "authenticated users can upload"
+  on storage.objects
+  for insert
+  to authenticated
+  with check (bucket_id = 'pet-icons');
 
--- ※ 上記が失敗する場合は Supabase Dashboard > Storage > pet-icons バケット
---    > Policies タブから手動で以下のポリシーを追加してください：
---
---    INSERT（アップロード）: auth.role() = 'authenticated'
---    UPDATE（上書き）      : auth.role() = 'authenticated'
---    SELECT（表示）        : true（全員）
+-- 認証済みユーザーが既存ファイルを上書き可能
+create policy "authenticated users can update"
+  on storage.objects
+  for update
+  to authenticated
+  using (bucket_id = 'pet-icons');
+
+-- 全員が pet-icons バケットのファイルを閲覧可能
+create policy "public can view pet icons"
+  on storage.objects
+  for select
+  to public
+  using (bucket_id = 'pet-icons');
