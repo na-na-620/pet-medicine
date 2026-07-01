@@ -106,7 +106,7 @@ export default function MedicationStatusPage() {
     )
 
     setSaving(false)
-    navigate('/', { state: { updatedSchedule }, replace: true })
+    navigate('/', { state: { updatedSchedule, returnDate: date }, replace: true })
   }
 
   if (!timing || !entries) {
@@ -128,8 +128,8 @@ export default function MedicationStatusPage() {
       <Header title="投薬状況登録" />
 
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24 flex flex-col gap-4">
-        {/* 戻るリンク */}
-        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800">
+        {/* 戻るリンク（入力していた日付のトップ画面へ戻る） */}
+        <button onClick={() => navigate('/', { state: { returnDate: date }, replace: true })} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800">
           ← トップへ戻る
         </button>
 
@@ -160,8 +160,13 @@ export default function MedicationStatusPage() {
         {entries.map((entry) => (
           <div key={entry.id} className="card">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-xl flex-shrink-0">
-                {entry.petIcon}
+              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-xl flex-shrink-0 overflow-hidden">
+                {entry.petIcon?.type === 'photo' ? (
+                  <img src={entry.petIcon.url} alt={entry.petName} className="w-full h-full object-cover"
+                    style={{ objectPosition: `${entry.petIcon.x}% ${entry.petIcon.y}%` }} />
+                ) : (
+                  entry.petIcon?.emoji ?? entry.petIcon ?? '🐾'
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">

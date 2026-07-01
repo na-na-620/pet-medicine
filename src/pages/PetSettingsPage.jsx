@@ -48,12 +48,16 @@ export default function PetSettingsPage() {
   const fileRef = useRef()
 
   const [name, setName] = useState('')
-  // 誕生日を年・月・日に分けて管理（一桁ずつ編集しやすいように）
+  // 誕生日：年・月・日に分けて管理（一桁ずつ編集しやすいように）
   const [birthYear,  setBirthYear]  = useState('')
   const [birthMonth, setBirthMonth] = useState('')
   const [birthDay,   setBirthDay]   = useState('')
   const [weight, setWeight] = useState('')
   const [inHeaven, setInHeaven] = useState(false)
+  // 旅立った日：年・月・日に分けて管理
+  const [deathYear,  setDeathYear]  = useState('')
+  const [deathMonth, setDeathMonth] = useState('')
+  const [deathDay,   setDeathDay]   = useState('')
 
   // アイコン状態
   const [iconType, setIconType] = useState('emoji')
@@ -72,9 +76,12 @@ export default function PetSettingsPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(isEdit)
 
-  // 結合した誕生日文字列（YYYY-MM-DD）
+  // 結合した誕生日・旅立ち日（YYYY-MM-DD）
   const birthday = birthYear && birthMonth && birthDay
     ? `${String(birthYear).padStart(4, '0')}-${String(birthMonth).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`
+    : ''
+  const deathDate = deathYear && deathMonth && deathDay
+    ? `${String(deathYear).padStart(4, '0')}-${String(deathMonth).padStart(2, '0')}-${String(deathDay).padStart(2, '0')}`
     : ''
 
   const age = calcAge(birthday)
@@ -97,6 +104,12 @@ export default function PetSettingsPage() {
         }
         setWeight(data.weight?.toString() ?? '')
         setInHeaven(data.in_heaven ?? false)
+        if (data.death_date) {
+          const [y, m, d] = data.death_date.split('-')
+          setDeathYear(y)
+          setDeathMonth(String(parseInt(m, 10)))
+          setDeathDay(String(parseInt(d, 10)))
+        }
         const icon = parseIcon(data.icon_type, data.icon_value)
         if (icon.type === 'photo') {
           setIconType('photo')
@@ -187,6 +200,26 @@ export default function PetSettingsPage() {
     e.preventDefault()
   }, [])
 
+  // 「旅立った子」トグル変更
+  // ONにしたら：旅立ち日をクリア待ち表示 + すべての薬を投薬停止に
+  const handleInHeavenChange = async (checked) => {
+    setInHeaven(checked)
+    if (!checked) {
+      setDeathYear('')
+      setDeathMonth('')
+      setDeathDay('')
+    }
+    if (checked && isEdit && medicines.length > 0) {
+      const { error: updErr } = await supabase
+        .from('medicines')
+        .update({ is_active: false })
+        .eq('pet_id', petId)
+      if (!updErr) {
+        setMedicines((prev) => prev.map((m) => ({ ...m, is_active: false })))
+      }
+    }
+  }
+
   // 保存
   const handleSave = async (e) => {
     e.preventDefault()
@@ -211,6 +244,7 @@ export default function PetSettingsPage() {
       icon_type: saveIconType,
       icon_value: saveIconValue,
       in_heaven: inHeaven,
+      death_date: inHeaven && deathDate ? deathDate : null,
     }
 
     let err
@@ -345,45 +379,19 @@ export default function PetSettingsPage() {
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="ポチ" required />
             </div>
 
-            {/* 誕生日：年・月・日を分けて入力（一桁ずつ消して入力しやすいように） */}
+            {/* 誕生日：年・月・日を分けて入力 */}
             <div>
               <label className="label">誕生日</label>
               <div className="flex items-center gap-2 flex-wrap">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  className="input text-center"
-                  style={{ maxWidth: 80 }}
-                  placeholder="2020"
-                  value={birthYear}
-                  onChange={(e) => setBirthYear(e.target.value)}
-                  min="1990"
-                  max={new Date().getFullYear()}
-                />
+                <input type="number" inputMode="numeric" className="input text-center" style={{ maxWidth: 80 }}
+                  placeholder="2020" value={birthYear} onChange={(e) => setBirthYear(e.target.value)}
+                  min="1990" max={new Date().getFullYear()} />
                 <span className="text-gray-500 text-sm">年</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  className="input text-center"
-                  style={{ maxWidth: 60 }}
-                  placeholder="1"
-                  value={birthMonth}
-                  onChange={(e) => setBirthMonth(e.target.value)}
-                  min="1"
-                  max="12"
-                />
+                <input type="number" inputMode="numeric" className="input text-center" style={{ maxWidth: 60 }}
+                  placeholder="1" value={birthMonth} onChange={(e) => setBirthMonth(e.target.value)} min="1" max="12" />
                 <span className="text-gray-500 text-sm">月</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  className="input text-center"
-                  style={{ maxWidth: 60 }}
-                  placeholder="1"
-                  value={birthDay}
-                  onChange={(e) => setBirthDay(e.target.value)}
-                  min="1"
-                  max="31"
-                />
+                <input type="number" inputMode="numeric" className="input text-center" style={{ maxWidth: 60 }}
+                  placeholder="1" value={birthDay} onChange={(e) => setBirthDay(e.target.value)} min="1" max="31" />
                 <span className="text-gray-500 text-sm">日</span>
               </div>
               {age !== null && <p className="text-xs text-gray-400 mt-1">→ 現在 {age}歳</p>}
@@ -404,17 +412,40 @@ export default function PetSettingsPage() {
             {saving ? '保存中...' : uploading ? 'アップロード中...' : '保存する'}
           </button>
 
-          {/* お空の子設定（ひそやかに、フォームの末尾に） */}
+          {/* お空の子設定（フォーム末尾にひそやかに） */}
           {isEdit && (
-            <div className="flex items-center justify-between py-3 px-4 rounded-2xl bg-gray-50/80 border border-gray-100">
-              <div>
-                <p className="text-xs text-gray-400 font-medium">⭐ 旅立った子として記録する</p>
-                <p className="text-xs text-gray-300 mt-0.5">投薬予定から除かれ、大切な記録として残ります</p>
+            <div className="rounded-2xl bg-gray-50/80 border border-gray-100 px-4 py-3 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-400 font-medium">⭐ 旅立った子として記録する</p>
+                  <p className="text-xs text-gray-300 mt-0.5">投薬予定から除かれ、大切な記録として残ります</p>
+                </div>
+                <label className="toggle">
+                  <input type="checkbox" checked={inHeaven} onChange={(e) => handleInHeavenChange(e.target.checked)} />
+                  <span className="toggle-slider" />
+                </label>
               </div>
-              <label className="toggle">
-                <input type="checkbox" checked={inHeaven} onChange={(e) => setInHeaven(e.target.checked)} />
-                <span className="toggle-slider" />
-              </label>
+
+              {/* 旅立った日付入力（ONのときのみ表示） */}
+              {inHeaven && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-2">旅立った日</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input type="number" inputMode="numeric" className="input text-center" style={{ maxWidth: 80 }}
+                      placeholder="2025" value={deathYear} onChange={(e) => setDeathYear(e.target.value)} />
+                    <span className="text-gray-400 text-sm">年</span>
+                    <input type="number" inputMode="numeric" className="input text-center" style={{ maxWidth: 60 }}
+                      placeholder="1" value={deathMonth} onChange={(e) => setDeathMonth(e.target.value)} min="1" max="12" />
+                    <span className="text-gray-400 text-sm">月</span>
+                    <input type="number" inputMode="numeric" className="input text-center" style={{ maxWidth: 60 }}
+                      placeholder="1" value={deathDay} onChange={(e) => setDeathDay(e.target.value)} min="1" max="31" />
+                    <span className="text-gray-400 text-sm">日</span>
+                  </div>
+                  <p className="text-xs text-gray-300 mt-1.5">
+                    この日までのトップ画面に投薬予定が残ります
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </form>
@@ -439,7 +470,7 @@ export default function PetSettingsPage() {
                   const medIcon = parseMedIcon(med.icon)
                   return (
                     <div key={med.id} className="card flex items-center gap-3">
-                      {/* 薬アイコン（クリックで編集） */}
+                      {/* 薬アイコン */}
                       <button
                         onClick={() => navigate(`/pets/${petId}/medicines/${med.id}/edit`)}
                         className="w-10 h-10 rounded-full overflow-hidden bg-amber-100 flex items-center justify-center text-2xl flex-shrink-0"
@@ -452,13 +483,25 @@ export default function PetSettingsPage() {
                         }
                       </button>
 
-                      {/* 薬名・効能（クリックで編集） */}
+                      {/* 薬名・投薬量・タイミング */}
                       <button
                         onClick={() => navigate(`/pets/${petId}/medicines/${med.id}/edit`)}
                         className="flex-1 text-left min-w-0"
                       >
                         <p className="text-sm font-bold text-gray-800">{med.name}</p>
-                        <p className="text-xs text-gray-400">{med.efficacy}</p>
+                        {med.efficacy && <p className="text-xs text-gray-400">{med.efficacy}</p>}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {med.dose_amount && (
+                            <span className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded-full">
+                              {med.dose_amount}
+                            </span>
+                          )}
+                          {(med.timings ?? []).map((t) => (
+                            <span key={t} className="text-xs bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded-full">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
                       </button>
 
                       <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${

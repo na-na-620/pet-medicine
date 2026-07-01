@@ -27,6 +27,17 @@ const getGroupTimeLabel = (entries) => {
   return earliest === latest ? earliest : `${earliest}〜${latest}`
 }
 
+// ペットのアイコン値（絵文字 or JSON写真）をパース
+const parsePetIcon = (iconType, iconValue) => {
+  if (iconType !== 'photo' || !iconValue) return { type: 'emoji', emoji: iconValue ?? '🐾' }
+  try {
+    const p = JSON.parse(iconValue)
+    return { type: 'photo', url: p.url, x: p.x ?? 50, y: p.y ?? 50 }
+  } catch {
+    return { type: 'photo', url: iconValue, x: 50, y: 50 }
+  }
+}
+
 // トップ画面
 export default function TopPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -41,10 +52,10 @@ export default function TopPage() {
   const fetchSchedule = async (date) => {
     setLoading(true)
     try {
+      // 全薬を取得（is_active フィルタはJSで行う）
       const { data: medicines, error } = await supabase
         .from('medicines')
-        .select('id, name, efficacy, timings, time_settings, dose_amount, interval_hours, pets(id, name, icon_type, icon_value, in_heaven)')
-        .eq('is_active', true)
+        .select('id, name, efficacy, timings, time_settings, dose_amount, interval_hours, is_active, pets(id, name, icon_type, icon_value, in_heaven, death_date)')
 
       if (error || !medicines?.length) {
         setSchedule([])
@@ -52,17 +63,31 @@ export default function TopPage() {
         return
       }
 
-      // お空の子の薬は除外
-      const activeMedicines = medicines.filter((m) => !m.pets?.in_heaven)
+      const logDate = date.toISOString().slice(0, 10)
+
+      // 表示対象の薬を絞り込む
+      // - 通常ペット: is_active = true のみ
+      // - お空の子:   death_date が設定されており、selectedDate <= death_date の日付なら表示
+      const activeMedicines = medicines.filter((m) => {
+        const pet = m.pets
+        if (!pet) return false
+        if (!pet.in_heaven) return m.is_active
+        if (!pet.death_date) return false
+        return logDate <= pet.death_date
+      })
+
+      if (!activeMedicines.length) {
+        setSchedule([])
+        setLoading(false)
+        return
+      }
 
       // 対象日の投薬ログを取得（shared_noteも含む）
-      const logDate = date.toISOString().slice(0, 10)
       const { data: logs } = await supabase
         .from('medication_logs')
         .select('medicine_id, timing, administered_percent, note, shared_note')
         .eq('log_date', logDate)
 
-      // medicine_id + timing をキーにログをマップ化
       const logsMap = {}
       const sharedNoteByTiming = {}
       ;(logs ?? []).forEach((l) => {
@@ -77,7 +102,7 @@ export default function TopPage() {
       activeMedicines.forEach((med) => {
         const pet = med.pets
         if (!pet) return
-        const petIcon = pet.icon_type === 'emoji' ? (pet.icon_value ?? '🐾') : '🐾'
+        const petIcon = parsePetIcon(pet.icon_type, pet.icon_value)
 
         ;(med.timings ?? []).forEach((timing) => {
           if (!timingMap[timing]) timingMap[timing] = []
@@ -103,7 +128,7 @@ export default function TopPage() {
         })
       })
 
-      // タイミング順にソートしてスケジュールを構築（shared_noteもグループに付与）
+      // タイミング順にソート
       const newSchedule = []
       TIMING_ORDER.forEach((t) => {
         if (timingMap[t]) newSchedule.push({ timing: t, entries: timingMap[t], sharedNote: sharedNoteByTiming[t] ?? '' })
@@ -127,11 +152,25 @@ export default function TopPage() {
     fetchSchedule(selectedDate)
   }, [selectedDate])
 
-  // MedicationStatusPageから戻った時に更新済みスケジュール全体を受け取る
+  // MedicationStatusPageから戻った時の処理
+  // returnDate: 表示を戻すべき日付
+  // updatedSchedule: 保存後のスケジュール全体（ある場合はDB再取得不要）
   useEffect(() => {
-    if (!location.state?.updatedSchedule) return
-    setSchedule(location.state.updatedSchedule)
-    lastLoadedDate.current = selectedDate.toDateString()
+    const { updatedSchedule, returnDate } = location.state ?? {}
+    if (!updatedSchedule && !returnDate) return
+
+    if (returnDate) {
+      const d = new Date(returnDate)
+      setSelectedDate(d)
+      if (updatedSchedule) {
+        // 保存後：スケジュールを直接反映し、DB再取得を防ぐ
+        setSchedule(updatedSchedule)
+        lastLoadedDate.current = d.toDateString()
+      }
+      // 戻るボタンの場合（updatedScheduleなし）：
+      // lastLoadedDateを更新しないので、日付変更effectがDB再取得を行う
+    }
+
     window.history.replaceState({}, document.title)
   }, [location.state])
 
@@ -193,15 +232,26 @@ export default function TopPage() {
                     const badge = getStatusBadge(entry.administered)
                     return (
                       <div key={entry.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-2xl">
-                        {/* ペットアイコン（クリックでペット設定へ） */}
+                        {/* ペットアイコン（写真 or 絵文字）クリックでペット設定へ */}
                         <button
                           type="button"
                           onClick={() => navigate(`/pets/${entry.petId}/edit`)}
-                          className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-xl flex-shrink-0 hover:ring-2 hover:ring-purple-400 transition-all"
+                          className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-xl flex-shrink-0 overflow-hidden hover:ring-2 hover:ring-purple-400 transition-all"
                           title={`${entry.petName}の設定を開く`}
                         >
-                          {entry.petIcon}
+                          {entry.petIcon.type === 'photo' ? (
+                            <img
+                              src={entry.petIcon.url}
+                              alt={entry.petName}
+                              className="w-full h-full object-cover"
+                              style={{ objectPosition: `${entry.petIcon.x}% ${entry.petIcon.y}%` }}
+                              onError={(e) => { e.currentTarget.style.display = 'none' }}
+                            />
+                          ) : (
+                            entry.petIcon.emoji
+                          )}
                         </button>
+
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
                             <span className="text-xs font-bold text-purple-700">{entry.petName}</span>
