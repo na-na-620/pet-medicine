@@ -60,6 +60,10 @@ export default function PetListPage() {
       <Header title="ペット一覧" />
 
       <main className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-4 pb-24">
+        {/* 戻るリンク（トップへ） */}
+        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800">
+          ← トップへ戻る
+        </button>
         {pets.length === 0 ? (
           <div className="card text-center py-12 text-gray-400">
             <p className="text-4xl mb-3">🐾</p>

@@ -107,8 +107,12 @@ export default function PetSettingsPage() {
       .upload(path, file, { upsert: true })
 
     if (uploadErr) {
-      setError('写真のアップロードに失敗しました。Storageの設定を確認してください。')
-      setPhotoPreview(null)
+      // アップロード失敗 → プレビューは残したままエラー表示（絵文字に戻さない）
+      const msg = uploadErr.message?.toLowerCase().includes('not found')
+        ? '写真のアップロードに失敗しました。Supabase Storageの「pet-icons」バケットとアップロードポリシーが設定されているか確認してください。'
+        : `写真のアップロードに失敗しました（${uploadErr.message}）。Storage設定を確認してください。`
+      setError(msg)
+      setIconType('emoji') // 保存時は絵文字にフォールバック
       setUploading(false)
       return
     }
@@ -220,9 +224,9 @@ export default function PetSettingsPage() {
       <Header title={isEdit ? 'ペット設定（編集）' : 'ペットを新規登録'} />
 
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24">
-        {/* 戻るリンク */}
-        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 mb-4">
-          ← トップへ戻る
+        {/* 戻るリンク（ペット一覧へ） */}
+        <button onClick={() => navigate('/pets')} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 mb-4">
+          ← ペット一覧へ戻る
         </button>
 
         <form onSubmit={handleSave} className="flex flex-col gap-5">

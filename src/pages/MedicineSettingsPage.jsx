@@ -75,9 +75,11 @@ export default function MedicineSettingsPage() {
       .upload(path, file, { upsert: true })
 
     if (uploadErr) {
-      setError('写真のアップロードに失敗しました')
-      setIconPreview(null)
-      setIconIsPhoto(false)
+      const msg = uploadErr.message?.toLowerCase().includes('not found')
+        ? '写真のアップロードに失敗しました。Supabase Storageの「pet-icons」バケットとアップロードポリシーが設定されているか確認してください。'
+        : `写真のアップロードに失敗しました（${uploadErr.message}）。Storage設定を確認してください。`
+      setError(msg)
+      setIconIsPhoto(false) // 保存時は絵文字にフォールバック
       setIconUploading(false)
       return
     }
