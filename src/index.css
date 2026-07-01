@@ -7,18 +7,21 @@
     font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
   }
   body {
-    background-color: #faf8f5;
+    /* ポップでかわいい背景グラデーション */
+    background: linear-gradient(135deg, #fdf4ff 0%, #fce7f3 50%, #fff1f2 100%);
+    background-attachment: fixed;
     color: #374151;
+    min-height: 100vh;
   }
 }
 
-/* 薬型モチーフの棒グラフ */
+/* ===== 薬型モチーフの棒グラフ ===== */
 .pill-bar {
   position: relative;
-  height: 32px;
+  height: 34px;
   border-radius: 999px;
-  background: #e5e7eb;
-  border: 2px solid #d1d5db;
+  background: #f3e8ff;
+  border: 2px solid #e9d5ff;
   overflow: hidden;
   min-width: 60px;
 }
@@ -32,63 +35,53 @@
   transition: width 0.4s ease;
 }
 
-.pill-bar-fill-0   { background: #e5e7eb; }
-.pill-bar-fill-low { background: linear-gradient(90deg, #fde68a, #fbbf24); }
-.pill-bar-fill-mid { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
-.pill-bar-fill-done { background: linear-gradient(90deg, #6ee7b7, #10b981); }
+.pill-bar-fill-low  { background: linear-gradient(90deg, #fcd34d, #fb923c); }
+.pill-bar-fill-mid  { background: linear-gradient(90deg, #fb923c, #f97316); }
+.pill-bar-fill-done { background: linear-gradient(90deg, #4ade80, #10b981); }
 
-/* スクロールバー非表示（日付スライダー） */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-/* カード共通 */
+/* ===== カード ===== */
 .card {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 16px;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow:
+    0 4px 20px rgba(168, 85, 247, 0.08),
+    0 1px 4px rgba(0, 0, 0, 0.04);
+  padding: 18px;
+  border: 1px solid rgba(233, 213, 255, 0.6);
 }
 
-/* フォーム要素 */
-.input {
-  width: 100%;
-  border: 1.5px solid #d1d5db;
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 15px;
-  outline: none;
-  transition: border-color 0.2s;
-  background: #fff;
-}
-.input:focus {
-  border-color: #7c5cbf;
-}
-
+/* ===== ボタン ===== */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 20px;
-  border-radius: 12px;
-  font-weight: 600;
+  padding: 11px 22px;
+  border-radius: 14px;
+  font-weight: 700;
   font-size: 15px;
-  transition: opacity 0.2s, transform 0.1s;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
   cursor: pointer;
   border: none;
+  letter-spacing: 0.01em;
 }
-.btn:active { transform: scale(0.97); }
+.btn:active { transform: scale(0.96); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
+/* プライマリ：紫→ピンクのグラデーション */
 .btn-primary {
-  background: #7c5cbf;
+  background: linear-gradient(135deg, #a855f7, #ec4899);
   color: #fff;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
 }
-.btn-primary:hover { opacity: 0.88; }
+.btn-primary:hover:not(:disabled) { opacity: 0.88; box-shadow: 0 6px 18px rgba(168, 85, 247, 0.4); }
 
+/* セカンダリ：淡い紫 */
 .btn-secondary {
-  background: #f3f0ff;
-  color: #7c5cbf;
+  background: linear-gradient(135deg, #f3e8ff, #fce7f3);
+  color: #9333ea;
+  border: 1.5px solid #e9d5ff;
 }
-.btn-secondary:hover { opacity: 0.88; }
+.btn-secondary:hover:not(:disabled) { opacity: 0.88; }
 
 .btn-danger {
   background: #fee2e2;
@@ -96,30 +89,56 @@
 }
 
 .btn-success {
-  background: #d1fae5;
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
   color: #059669;
+  border: 1.5px solid #a7f3d0;
+}
+
+/* ===== スクロールバー非表示 ===== */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ===== フォーム要素 ===== */
+.input {
+  width: 100%;
+  border: 2px solid #e9d5ff;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: #fff;
+  color: #374151;
+}
+.input:focus {
+  border-color: #a855f7;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.12);
+}
+.input:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
 }
 
 .label {
   font-size: 13px;
-  font-weight: 600;
-  color: #6b7280;
-  margin-bottom: 4px;
+  font-weight: 700;
+  color: #7c3aed;
+  margin-bottom: 5px;
   display: block;
 }
 
-/* トグルスイッチ */
+/* ===== トグルスイッチ ===== */
 .toggle {
   position: relative;
-  width: 48px;
-  height: 26px;
+  width: 50px;
+  height: 28px;
   display: inline-block;
 }
 .toggle input { opacity: 0; width: 0; height: 0; }
 .toggle-slider {
   position: absolute;
   inset: 0;
-  background: #d1d5db;
+  background: #e5e7eb;
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.2s;
@@ -127,14 +146,29 @@
 .toggle-slider:before {
   content: '';
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #fff;
   top: 3px;
   left: 3px;
   transition: transform 0.2s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
-.toggle input:checked + .toggle-slider { background: #7c5cbf; }
+.toggle input:checked + .toggle-slider { background: linear-gradient(135deg, #a855f7, #ec4899); }
 .toggle input:checked + .toggle-slider:before { transform: translateX(22px); }
+
+/* ===== ヘッダー ===== */
+header {
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(233, 213, 255, 0.8);
+}
+
+/* ===== 日付スライダー ===== */
+.date-slider-bg {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(233, 213, 255, 0.6);
+}
