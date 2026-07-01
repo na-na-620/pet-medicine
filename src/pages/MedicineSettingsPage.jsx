@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Header from '../components/Header'
 import { supabase } from '../lib/supabase'
@@ -6,8 +6,20 @@ import { useAuth } from '../context/AuthContext'
 
 const TIMING_OPTIONS = ['朝', '昼', '晩', '食前', '食後', '起床時', '就寝前', 'その他']
 const DOSE_OPTIONS = ['全量', '半錠', '1/3', '2/3', '1錠', '1.5錠', '2錠', '3錠']
-// 薬アイコン絵文字（写真選択も可能）
 const MED_ICONS = ['💊', '🧴', '💉', '🩹', '🩺', '🔬', '⚗️', '🫁']
+
+// 薬アイコン値（JSON or URL or 絵文字）をパース
+const parseMedIcon = (iconValue) => {
+  if (!iconValue) return { isPhoto: false, url: null, x: 50, y: 50, emoji: '💊' }
+  try {
+    const p = JSON.parse(iconValue)
+    if (p.url) return { isPhoto: true, url: p.url, x: p.x ?? 50, y: p.y ?? 50, emoji: null }
+  } catch {}
+  if (iconValue.startsWith('http') || iconValue.startsWith('/')) {
+    return { isPhoto: true, url: iconValue, x: 50, y: 50, emoji: null }
+  }
+  return { isPhoto: false, url: null, x: 50, y: 50, emoji: iconValue }
+}
 
 // 薬設定画面（新規登録 / 既存編集）
 export default function MedicineSettingsPage() {
@@ -17,11 +29,15 @@ export default function MedicineSettingsPage() {
   const { user } = useAuth()
   const fileRef = useRef()
 
-  // 薬アイコン（絵文字 or 写真URL）
+  // 薬アイコン
   const [icon, setIcon] = useState('💊')
-  const [iconPreview, setIconPreview] = useState(null)  // 写真のプレビューURL
-  const [iconIsPhoto, setIconIsPhoto] = useState(false)  // 写真かどうか
+  const [iconPreview, setIconPreview] = useState(null)
+  const [iconIsPhoto, setIconIsPhoto] = useState(false)
   const [iconUploading, setIconUploading] = useState(false)
+  // 写真の表示位置（ドラッグリポジション）
+  const [iconPos, setIconPos] = useState({ x: 50, y: 50 })
+  const isDragging = useRef(false)
+  const dragOrigin = useRef({ clientX: 0, clientY: 0, x: 50, y: 50 })
 
   const [name, setName] = useState('')
   const [efficacy, setEfficacy] = useState('')
@@ -34,16 +50,21 @@ export default function MedicineSettingsPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(isEdit)
 
-  // 編集時は既存データを取得
   useEffect(() => {
     if (!isEdit) return
     const fetch = async () => {
       const { data } = await supabase.from('medicines').select('*').eq('id', medicineId).single()
       if (data) {
-        const isPhoto = data.icon?.startsWith('http') || data.icon?.startsWith('/')
-        setIcon(data.icon ?? '💊')
-        setIconIsPhoto(isPhoto)
-        if (isPhoto) setIconPreview(data.icon)
+        const parsed = parseMedIcon(data.icon)
+        if (parsed.isPhoto) {
+          setIcon(parsed.url)
+          setIconIsPhoto(true)
+          setIconPreview(parsed.url)
+          setIconPos({ x: parsed.x, y: parsed.y })
+        } else {
+          setIcon(parsed.emoji)
+          setIconIsPhoto(false)
+        }
         setName(data.name ?? '')
         setEfficacy(data.efficacy ?? '')
         setTimings(data.timings ?? [])
@@ -57,7 +78,7 @@ export default function MedicineSettingsPage() {
     fetch()
   }, [medicineId])
 
-  // 薬アイコン写真アップロード
+  // 写真アップロード
   const handleIconPhotoChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -66,6 +87,7 @@ export default function MedicineSettingsPage() {
     const preview = URL.createObjectURL(file)
     setIconPreview(preview)
     setIconIsPhoto(true)
+    setIconPos({ x: 50, y: 50 })
     setIconUploading(true)
 
     const ext = file.name.split('.').pop()
@@ -79,7 +101,7 @@ export default function MedicineSettingsPage() {
         ? '写真のアップロードに失敗しました。Supabase Storageの「pet-icons」バケットとアップロードポリシーが設定されているか確認してください。'
         : `写真のアップロードに失敗しました（${uploadErr.message}）。Storage設定を確認してください。`
       setError(msg)
-      setIconIsPhoto(false) // 保存時は絵文字にフォールバック
+      setIconIsPhoto(false)
       setIconUploading(false)
       return
     }
@@ -89,14 +111,52 @@ export default function MedicineSettingsPage() {
     setIconUploading(false)
   }
 
-  // 絵文字アイコンを選択
   const handleEmojiSelect = (emoji) => {
     setIcon(emoji)
     setIconIsPhoto(false)
     setIconPreview(null)
   }
 
-  // 投薬タイミングの選択/解除（複数選択可）
+  // ドラッグ（マウス）
+  const handleMouseDown = (e) => {
+    if (!iconIsPhoto) return
+    isDragging.current = true
+    dragOrigin.current = { clientX: e.clientX, clientY: e.clientY, x: iconPos.x, y: iconPos.y }
+    e.preventDefault()
+  }
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging.current) return
+    const dx = e.clientX - dragOrigin.current.clientX
+    const dy = e.clientY - dragOrigin.current.clientY
+    setIconPos({
+      x: Math.min(100, Math.max(0, dragOrigin.current.x - dx * 0.5)),
+      y: Math.min(100, Math.max(0, dragOrigin.current.y - dy * 0.5)),
+    })
+  }, [])
+
+  const handleMouseUp = useCallback(() => { isDragging.current = false }, [])
+
+  // ドラッグ（タッチ）
+  const handleTouchStart = (e) => {
+    if (!iconIsPhoto) return
+    const t = e.touches[0]
+    isDragging.current = true
+    dragOrigin.current = { clientX: t.clientX, clientY: t.clientY, x: iconPos.x, y: iconPos.y }
+  }
+
+  const handleTouchMove = useCallback((e) => {
+    if (!isDragging.current) return
+    const t = e.touches[0]
+    const dx = t.clientX - dragOrigin.current.clientX
+    const dy = t.clientY - dragOrigin.current.clientY
+    setIconPos({
+      x: Math.min(100, Math.max(0, dragOrigin.current.x - dx * 0.5)),
+      y: Math.min(100, Math.max(0, dragOrigin.current.y - dy * 0.5)),
+    })
+    e.preventDefault()
+  }, [])
+
   const toggleTiming = (t) => {
     if (timings.includes(t)) {
       setTimings(timings.filter((x) => x !== t))
@@ -113,7 +173,6 @@ export default function MedicineSettingsPage() {
     setTimeSettings((prev) => ({ ...prev, [timing]: { ...prev[timing], [field]: value } }))
   }
 
-  // 保存処理
   const handleSave = async (e) => {
     e.preventDefault()
     setError('')
@@ -129,10 +188,16 @@ export default function MedicineSettingsPage() {
     }
 
     setSaving(true)
+
+    // 写真の場合はJSON形式で位置情報も保存
+    const saveIcon = iconIsPhoto && icon
+      ? JSON.stringify({ url: icon, x: iconPos.x, y: iconPos.y })
+      : icon
+
     const payload = {
       pet_id: petId,
       user_id: user.id,
-      icon,
+      icon: saveIcon,
       name: name.trim(),
       efficacy: efficacy.trim(),
       timings,
@@ -161,32 +226,51 @@ export default function MedicineSettingsPage() {
     </div>
   )
 
+  const displayPreview = iconIsPhoto && iconPreview
+
   return (
-    <div className="min-h-screen">
+    <div
+      className="min-h-screen"
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+    >
       <Header title={isEdit ? '薬設定（編集）' : '薬を新規登録'} />
 
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24">
-        {/* 戻るリンク */}
         <button onClick={() => navigate(`/pets/${petId}/edit`)} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 mb-4">
           ← ペット設定へ戻る
         </button>
 
         <form onSubmit={handleSave} className="flex flex-col gap-5">
 
-          {/* 薬アイコン（絵文字 or 写真） */}
+          {/* 薬アイコン */}
           <div className="card">
             <h2 className="text-sm font-bold text-gray-700 mb-3">薬アイコン</h2>
 
-            {/* 現在のアイコンプレビュー */}
             <div className="flex justify-center mb-4">
               <div className="relative inline-block">
-                <div className="w-20 h-20 rounded-full overflow-hidden bg-amber-100 flex items-center justify-center text-4xl border-4 border-amber-200">
-                  {iconIsPhoto && iconPreview
-                    ? <img src={iconPreview} alt="icon" className="w-full h-full object-cover" />
-                    : <span>{icon}</span>
-                  }
+                <div
+                  className={`w-20 h-20 rounded-full overflow-hidden bg-amber-100 flex items-center justify-center text-4xl border-4 border-amber-200 select-none ${
+                    displayPreview ? 'cursor-grab active:cursor-grabbing' : ''
+                  }`}
+                  onMouseDown={handleMouseDown}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleMouseUp}
+                >
+                  {displayPreview ? (
+                    <img
+                      src={iconPreview}
+                      alt="icon"
+                      className="w-full h-full object-cover pointer-events-none"
+                      style={{ objectPosition: `${iconPos.x}% ${iconPos.y}%` }}
+                      draggable={false}
+                    />
+                  ) : (
+                    <span>{icon}</span>
+                  )}
                 </div>
-                {/* カメラバッジ */}
+
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
@@ -202,11 +286,13 @@ export default function MedicineSettingsPage() {
               </div>
             </div>
 
+            {displayPreview && (
+              <p className="text-xs text-center text-gray-400 mb-2">ドラッグして表示位置を調整できます</p>
+            )}
             {iconUploading && <p className="text-xs text-center text-purple-500 mb-2">アップロード中...</p>}
 
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleIconPhotoChange} />
 
-            {/* 絵文字選択 */}
             <p className="label mb-2">絵文字アイコンから選択</p>
             <div className="flex gap-2 flex-wrap">
               {MED_ICONS.map((ic) => (
@@ -285,7 +371,6 @@ export default function MedicineSettingsPage() {
               ))}
             </div>
 
-            {/* タイミングごとの時間設定（ピンポイント or 時間帯） */}
             {timings.map((timing) => {
               const ts = timeSettings[timing] ?? { type: 'point', start: '08:00', end: '08:00' }
               return (

@@ -20,7 +20,7 @@ export default function MedicationStatusPage() {
     Object.fromEntries((initialEntries ?? []).map((e) => [e.id, String(e.administered)]))
   )
   const [allDoneMode, setAllDoneMode] = useState(false)
-  const [sharedNote, setSharedNote] = useState('')
+  const [sharedNote, setSharedNote] = useState(location.state?.sharedNote ?? '')
   const [saving, setSaving] = useState(false)
 
   const dateLabel = date
@@ -102,7 +102,7 @@ export default function MedicationStatusPage() {
     // 【バグ修正】fullScheduleの該当タイミングだけを更新し、全体を返す
     // こうすることでTopPageが再マウント後もスケジュール全体が保持される
     const updatedSchedule = (fullSchedule ?? []).map((g) =>
-      g.timing === timing ? { ...g, entries } : g
+      g.timing === timing ? { ...g, entries, sharedNote } : g
     )
 
     setSaving(false)
@@ -128,6 +128,11 @@ export default function MedicationStatusPage() {
       <Header title="投薬状況登録" />
 
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24 flex flex-col gap-4">
+        {/* 戻るリンク */}
+        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800">
+          ← トップへ戻る
+        </button>
+
         {/* タイミング・日付ヘッダー + 全済トグル */}
         <div className="card flex items-center justify-between">
           <div>

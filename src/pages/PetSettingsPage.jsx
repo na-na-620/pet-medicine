@@ -4,7 +4,6 @@ import Header from '../components/Header'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-// デフォルトアイコン（正面向きの絵文字に統一）
 const DEFAULT_ICONS = ['🐶', '🐱', '🐰', '🐹', '🦜', '🐢', '🐠', '🦎', '🐾']
 
 const calcAge = (birthday) => {
@@ -17,7 +16,6 @@ const calcAge = (birthday) => {
   return age
 }
 
-// アイコン値のパース
 const parseIcon = (iconType, iconValue) => {
   if (iconType !== 'photo' || !iconValue) return { type: 'emoji', emoji: iconValue ?? '🐶' }
   try {
@@ -26,6 +24,19 @@ const parseIcon = (iconType, iconValue) => {
   } catch {
     return { type: 'photo', url: iconValue, x: 50, y: 50 }
   }
+}
+
+// 薬アイコン値（JSON or URL or 絵文字）をパース
+const parseMedIcon = (iconValue) => {
+  if (!iconValue) return { isPhoto: false, url: null, x: 50, y: 50, emoji: '💊' }
+  try {
+    const p = JSON.parse(iconValue)
+    if (p.url) return { isPhoto: true, url: p.url, x: p.x ?? 50, y: p.y ?? 50, emoji: null }
+  } catch {}
+  if (iconValue.startsWith('http') || iconValue.startsWith('/')) {
+    return { isPhoto: true, url: iconValue, x: 50, y: 50, emoji: null }
+  }
+  return { isPhoto: false, url: null, x: 50, y: 50, emoji: iconValue }
 }
 
 // ペット設定画面（新規登録 / 既存編集）
@@ -37,27 +48,37 @@ export default function PetSettingsPage() {
   const fileRef = useRef()
 
   const [name, setName] = useState('')
-  const [birthday, setBirthday] = useState('')
+  // 誕生日を年・月・日に分けて管理（一桁ずつ編集しやすいように）
+  const [birthYear,  setBirthYear]  = useState('')
+  const [birthMonth, setBirthMonth] = useState('')
+  const [birthDay,   setBirthDay]   = useState('')
   const [weight, setWeight] = useState('')
+  const [inHeaven, setInHeaven] = useState(false)
 
   // アイコン状態
   const [iconType, setIconType] = useState('emoji')
   const [selectedEmoji, setSelectedEmoji] = useState('🐶')
-  const [photoPreview, setPhotoPreview] = useState(null)  // ローカルblob URL（表示用）
-  const [photoPublicUrl, setPhotoPublicUrl] = useState(null) // Storageの公開URL（保存用）
-  const [photoPos, setPhotoPos] = useState({ x: 50, y: 50 }) // 写真の表示位置（%）
+  const [photoPreview, setPhotoPreview] = useState(null)
+  const [photoPublicUrl, setPhotoPublicUrl] = useState(null)
+  const [photoPos, setPhotoPos] = useState({ x: 50, y: 50 })
   const [uploading, setUploading] = useState(false)
 
-  // ドラッグ状態（refで管理してrerender不要に）
   const isDragging = useRef(false)
   const dragOrigin = useRef({ clientX: 0, clientY: 0, x: 50, y: 50 })
 
   const [medicines, setMedicines] = useState([])
+  const [deletingMedId, setDeletingMedId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(isEdit)
 
-  // 編集時は既存データを取得
+  // 結合した誕生日文字列（YYYY-MM-DD）
+  const birthday = birthYear && birthMonth && birthDay
+    ? `${String(birthYear).padStart(4, '0')}-${String(birthMonth).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`
+    : ''
+
+  const age = calcAge(birthday)
+
   useEffect(() => {
     if (!isEdit) return
     const fetchPet = async () => {
@@ -68,8 +89,14 @@ export default function PetSettingsPage() {
         .single()
       if (data) {
         setName(data.name ?? '')
-        setBirthday(data.birthday ?? '')
+        if (data.birthday) {
+          const [y, m, d] = data.birthday.split('-')
+          setBirthYear(y)
+          setBirthMonth(String(parseInt(m, 10)))
+          setBirthDay(String(parseInt(d, 10)))
+        }
         setWeight(data.weight?.toString() ?? '')
+        setInHeaven(data.in_heaven ?? false)
         const icon = parseIcon(data.icon_type, data.icon_value)
         if (icon.type === 'photo') {
           setIconType('photo')
@@ -87,19 +114,17 @@ export default function PetSettingsPage() {
     fetchPet()
   }, [petId])
 
-  // 写真選択 → プレビュー表示 → Supabase Storageにアップロード
+  // 写真アップロード
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    e.target.value = '' // 同じファイルの再選択を可能にする
+    e.target.value = ''
 
-    // まずローカルプレビューを表示
     const preview = URL.createObjectURL(file)
     setPhotoPreview(preview)
     setPhotoPos({ x: 50, y: 50 })
     setUploading(true)
 
-    // Supabase Storageにアップロード
     const ext = file.name.split('.').pop()
     const path = `pets/${user.id}/${Date.now()}.${ext}`
     const { error: uploadErr } = await supabase.storage
@@ -107,24 +132,22 @@ export default function PetSettingsPage() {
       .upload(path, file, { upsert: true })
 
     if (uploadErr) {
-      // アップロード失敗 → プレビューは残したままエラー表示（絵文字に戻さない）
       const msg = uploadErr.message?.toLowerCase().includes('not found')
         ? '写真のアップロードに失敗しました。Supabase Storageの「pet-icons」バケットとアップロードポリシーが設定されているか確認してください。'
         : `写真のアップロードに失敗しました（${uploadErr.message}）。Storage設定を確認してください。`
       setError(msg)
-      setIconType('emoji') // 保存時は絵文字にフォールバック
+      setIconType('emoji')
       setUploading(false)
       return
     }
 
     const { data: urlData } = supabase.storage.from('pet-icons').getPublicUrl(path)
-    // アップロード成功後にのみ iconType を photo に設定
     setPhotoPublicUrl(urlData.publicUrl)
     setIconType('photo')
     setUploading(false)
   }
 
-  // ドラッグ開始（マウス）
+  // ドラッグ（マウス）
   const handleMouseDown = (e) => {
     if (iconType !== 'photo') return
     isDragging.current = true
@@ -132,7 +155,6 @@ export default function PetSettingsPage() {
     e.preventDefault()
   }
 
-  // ドラッグ移動（マウス）
   const handleMouseMove = useCallback((e) => {
     if (!isDragging.current) return
     const dx = e.clientX - dragOrigin.current.clientX
@@ -145,7 +167,7 @@ export default function PetSettingsPage() {
 
   const handleMouseUp = useCallback(() => { isDragging.current = false }, [])
 
-  // ドラッグ開始（タッチ）
+  // ドラッグ（タッチ）
   const handleTouchStart = (e) => {
     if (iconType !== 'photo') return
     const t = e.touches[0]
@@ -165,7 +187,7 @@ export default function PetSettingsPage() {
     e.preventDefault()
   }, [])
 
-  // 保存処理（アイコン値はJSONで位置情報も保持）
+  // 保存
   const handleSave = async (e) => {
     e.preventDefault()
     setError('')
@@ -188,6 +210,7 @@ export default function PetSettingsPage() {
       weight: weight ? parseFloat(weight) : null,
       icon_type: saveIconType,
       icon_value: saveIconValue,
+      in_heaven: inHeaven,
     }
 
     let err
@@ -202,6 +225,20 @@ export default function PetSettingsPage() {
     navigate('/pets')
   }
 
+  // 薬を削除
+  const handleDeleteMedicine = async (med) => {
+    const confirmed = window.confirm(`「${med.name}」を削除しますか？\nこの操作は取り消せません。`)
+    if (!confirmed) return
+    setDeletingMedId(med.id)
+    const { error: delErr } = await supabase.from('medicines').delete().eq('id', med.id)
+    if (delErr) {
+      setError('薬の削除に失敗しました')
+    } else {
+      setMedicines((prev) => prev.filter((m) => m.id !== med.id))
+    }
+    setDeletingMedId(null)
+  }
+
   if (loading) return (
     <div className="min-h-screen">
       <Header title="ペット設定" />
@@ -209,9 +246,6 @@ export default function PetSettingsPage() {
     </div>
   )
 
-  const age = calcAge(birthday)
-
-  // 現在表示するアイコン情報
   const displayPhoto = iconType === 'photo' && photoPreview
   const displayEmoji = !displayPhoto ? selectedEmoji : null
 
@@ -224,7 +258,6 @@ export default function PetSettingsPage() {
       <Header title={isEdit ? 'ペット設定（編集）' : 'ペットを新規登録'} />
 
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24">
-        {/* 戻るリンク（ペット一覧へ） */}
         <button onClick={() => navigate('/pets')} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 mb-4">
           ← ペット一覧へ戻る
         </button>
@@ -235,10 +268,8 @@ export default function PetSettingsPage() {
           <div className="card">
             <h2 className="text-sm font-bold text-gray-700 mb-4">アイコン</h2>
 
-            {/* Gmail風アバター（アバター本体 or 右下カメラバッジをクリックで写真選択） */}
             <div className="flex flex-col items-center mb-5">
               <div className="relative inline-block">
-                {/* アバター本体 */}
                 <div
                   className={`w-28 h-28 rounded-full overflow-hidden border-4 border-purple-200 select-none flex items-center justify-center bg-purple-100 ${
                     displayPhoto ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
@@ -262,14 +293,12 @@ export default function PetSettingsPage() {
                   )}
                 </div>
 
-                {/* 右下カメラバッジ（クリックで写真選択） */}
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   className="absolute bottom-1 right-1 w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center border-2 border-white hover:bg-gray-700 transition-colors shadow-md"
                   title="写真を変更"
                 >
-                  {/* カメラアイコン */}
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -278,7 +307,6 @@ export default function PetSettingsPage() {
                 </button>
               </div>
 
-              {/* 写真選択時のドラッグ説明 */}
               {displayPhoto && (
                 <p className="text-xs text-gray-400 mt-2">ドラッグして表示位置を調整できます</p>
               )}
@@ -287,10 +315,8 @@ export default function PetSettingsPage() {
               )}
             </div>
 
-            {/* 隠しファイル入力 */}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
 
-            {/* デフォルト絵文字選択 */}
             <p className="label mb-2">デフォルトアイコンから選択</p>
             <div className="flex flex-wrap gap-2">
               {DEFAULT_ICONS.map((emoji) => (
@@ -313,17 +339,56 @@ export default function PetSettingsPage() {
           {/* 基本情報 */}
           <div className="card flex flex-col gap-4">
             <h2 className="text-sm font-bold text-gray-700">基本情報</h2>
+
             <div>
               <label className="label">名前 <span className="text-red-400">*</span></label>
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="ポチ" required />
             </div>
+
+            {/* 誕生日：年・月・日を分けて入力（一桁ずつ消して入力しやすいように） */}
             <div>
               <label className="label">誕生日</label>
-              <input className="input" type="date" value={birthday}
-                onChange={(e) => setBirthday(e.target.value)}
-                max={new Date().toISOString().slice(0, 10)} />
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  className="input text-center"
+                  style={{ maxWidth: 80 }}
+                  placeholder="2020"
+                  value={birthYear}
+                  onChange={(e) => setBirthYear(e.target.value)}
+                  min="1990"
+                  max={new Date().getFullYear()}
+                />
+                <span className="text-gray-500 text-sm">年</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  className="input text-center"
+                  style={{ maxWidth: 60 }}
+                  placeholder="1"
+                  value={birthMonth}
+                  onChange={(e) => setBirthMonth(e.target.value)}
+                  min="1"
+                  max="12"
+                />
+                <span className="text-gray-500 text-sm">月</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  className="input text-center"
+                  style={{ maxWidth: 60 }}
+                  placeholder="1"
+                  value={birthDay}
+                  onChange={(e) => setBirthDay(e.target.value)}
+                  min="1"
+                  max="31"
+                />
+                <span className="text-gray-500 text-sm">日</span>
+              </div>
               {age !== null && <p className="text-xs text-gray-400 mt-1">→ 現在 {age}歳</p>}
             </div>
+
             <div>
               <label className="label">体重（kg）</label>
               <input className="input" type="number" step="0.1" min="0" value={weight}
@@ -338,6 +403,20 @@ export default function PetSettingsPage() {
           <button type="submit" disabled={saving || uploading} className="btn btn-primary w-full text-base">
             {saving ? '保存中...' : uploading ? 'アップロード中...' : '保存する'}
           </button>
+
+          {/* お空の子設定（ひそやかに、フォームの末尾に） */}
+          {isEdit && (
+            <div className="flex items-center justify-between py-3 px-4 rounded-2xl bg-gray-50/80 border border-gray-100">
+              <div>
+                <p className="text-xs text-gray-400 font-medium">⭐ 旅立った子として記録する</p>
+                <p className="text-xs text-gray-300 mt-0.5">投薬予定から除かれ、大切な記録として残ります</p>
+              </div>
+              <label className="toggle">
+                <input type="checkbox" checked={inHeaven} onChange={(e) => setInHeaven(e.target.checked)} />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+          )}
         </form>
 
         {/* 薬設定セクション（編集時のみ） */}
@@ -357,33 +436,54 @@ export default function PetSettingsPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 {medicines.map((med) => {
-                  // 薬アイコンがURL形式（写真）かどうか判定
-                  const isPhotoIcon = med.icon?.startsWith('http') || med.icon?.startsWith('/')
+                  const medIcon = parseMedIcon(med.icon)
                   return (
-                    <button
-                      key={med.id}
-                      onClick={() => navigate(`/pets/${petId}/medicines/${med.id}/edit`)}
-                      className="card flex items-center gap-3 text-left hover:shadow-md transition-all"
-                    >
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-amber-100 flex items-center justify-center text-2xl flex-shrink-0">
-                        {isPhotoIcon
-                          ? <img src={med.icon} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display='none' }} />
-                          : <span>{med.icon ?? '💊'}</span>
+                    <div key={med.id} className="card flex items-center gap-3">
+                      {/* 薬アイコン（クリックで編集） */}
+                      <button
+                        onClick={() => navigate(`/pets/${petId}/medicines/${med.id}/edit`)}
+                        className="w-10 h-10 rounded-full overflow-hidden bg-amber-100 flex items-center justify-center text-2xl flex-shrink-0"
+                      >
+                        {medIcon.isPhoto
+                          ? <img src={medIcon.url} alt="" className="w-full h-full object-cover"
+                              style={{ objectPosition: `${medIcon.x}% ${medIcon.y}%` }}
+                              onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                          : <span>{medIcon.emoji}</span>
                         }
-                      </div>
-                      <div className="flex-1">
+                      </button>
+
+                      {/* 薬名・効能（クリックで編集） */}
+                      <button
+                        onClick={() => navigate(`/pets/${petId}/medicines/${med.id}/edit`)}
+                        className="flex-1 text-left min-w-0"
+                      >
                         <p className="text-sm font-bold text-gray-800">{med.name}</p>
                         <p className="text-xs text-gray-400">{med.efficacy}</p>
-                      </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      </button>
+
+                      <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
                         med.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'
                       }`}>
                         {med.is_active ? '投薬中' : '停止中'}
                       </span>
-                      <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
+
+                      {/* 削除ボタン */}
+                      <button
+                        onClick={() => handleDeleteMedicine(med)}
+                        disabled={deletingMedId === med.id}
+                        className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 rounded-full transition-all flex-shrink-0"
+                        title="削除"
+                      >
+                        {deletingMedId === med.id ? (
+                          <span className="text-xs">...</span>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   )
                 })}
               </div>

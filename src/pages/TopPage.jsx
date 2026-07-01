@@ -41,10 +41,9 @@ export default function TopPage() {
   const fetchSchedule = async (date) => {
     setLoading(true)
     try {
-      // アクティブな薬とペット情報を取得（RLSにより自分の薬のみ返る）
       const { data: medicines, error } = await supabase
         .from('medicines')
-        .select('id, name, efficacy, timings, time_settings, dose_amount, interval_hours, pets(id, name, icon_type, icon_value)')
+        .select('id, name, efficacy, timings, time_settings, dose_amount, interval_hours, pets(id, name, icon_type, icon_value, in_heaven)')
         .eq('is_active', true)
 
       if (error || !medicines?.length) {
@@ -53,23 +52,31 @@ export default function TopPage() {
         return
       }
 
-      // 対象日の投薬ログを取得
+      // お空の子の薬は除外
+      const activeMedicines = medicines.filter((m) => !m.pets?.in_heaven)
+
+      // 対象日の投薬ログを取得（shared_noteも含む）
       const logDate = date.toISOString().slice(0, 10)
       const { data: logs } = await supabase
         .from('medication_logs')
-        .select('medicine_id, timing, administered_percent, note')
+        .select('medicine_id, timing, administered_percent, note, shared_note')
         .eq('log_date', logDate)
 
       // medicine_id + timing をキーにログをマップ化
       const logsMap = {}
-      ;(logs ?? []).forEach((l) => { logsMap[`${l.medicine_id}_${l.timing}`] = l })
+      const sharedNoteByTiming = {}
+      ;(logs ?? []).forEach((l) => {
+        logsMap[`${l.medicine_id}_${l.timing}`] = l
+        if (l.shared_note && !sharedNoteByTiming[l.timing]) {
+          sharedNoteByTiming[l.timing] = l.shared_note
+        }
+      })
 
       // タイミングごとにエントリをグループ化
       const timingMap = {}
-      medicines.forEach((med) => {
+      activeMedicines.forEach((med) => {
         const pet = med.pets
         if (!pet) return
-        // ペットアイコンは絵文字のみ表示（一覧での写真表示はPetListPageで行う）
         const petIcon = pet.icon_type === 'emoji' ? (pet.icon_value ?? '🐾') : '🐾'
 
         ;(med.timings ?? []).forEach((timing) => {
@@ -96,11 +103,13 @@ export default function TopPage() {
         })
       })
 
-      // タイミング順にソートしてスケジュールを構築
+      // タイミング順にソートしてスケジュールを構築（shared_noteもグループに付与）
       const newSchedule = []
-      TIMING_ORDER.forEach((t) => { if (timingMap[t]) newSchedule.push({ timing: t, entries: timingMap[t] }) })
+      TIMING_ORDER.forEach((t) => {
+        if (timingMap[t]) newSchedule.push({ timing: t, entries: timingMap[t], sharedNote: sharedNoteByTiming[t] ?? '' })
+      })
       Object.keys(timingMap).forEach((t) => {
-        if (!TIMING_ORDER.includes(t)) newSchedule.push({ timing: t, entries: timingMap[t] })
+        if (!TIMING_ORDER.includes(t)) newSchedule.push({ timing: t, entries: timingMap[t], sharedNote: sharedNoteByTiming[t] ?? '' })
       })
 
       setSchedule(newSchedule)
@@ -110,7 +119,7 @@ export default function TopPage() {
     setLoading(false)
   }
 
-  // 日付変更時のみDBから再取得（同じ日付なら再取得しない）
+  // 日付変更時のみDBから再取得
   useEffect(() => {
     const dateStr = selectedDate.toDateString()
     if (lastLoadedDate.current === dateStr) return
@@ -118,25 +127,23 @@ export default function TopPage() {
     fetchSchedule(selectedDate)
   }, [selectedDate])
 
-  // ===== MedicationStatusPageから戻った時に更新済みスケジュール全体を受け取る =====
-  // 【バグ修正】以前はlocation.stateでエントリのみを更新していたが、
-  // TopPageが再マウント時にDBから再取得してしまうため反映されなかった。
-  // 修正：スケジュール全体をMedicationStatusPageに渡し、更新済み全体を受け取る。
+  // MedicationStatusPageから戻った時に更新済みスケジュール全体を受け取る
   useEffect(() => {
     if (!location.state?.updatedSchedule) return
     setSchedule(location.state.updatedSchedule)
-    lastLoadedDate.current = selectedDate.toDateString() // 日付変更時の再取得を防ぐ
+    lastLoadedDate.current = selectedDate.toDateString()
     window.history.replaceState({}, document.title)
   }, [location.state])
 
-  // 投薬状況登録画面へ遷移（スケジュール全体も渡す）
+  // 投薬状況登録画面へ遷移（shared_noteも含めてスケジュール全体を渡す）
   const handleRegister = (group) => {
     navigate('/medication-status', {
       state: {
         timing: group.timing,
         date: selectedDate.toISOString(),
         entries: group.entries,
-        fullSchedule: schedule,  // 全タイミングのスケジュールも渡す
+        fullSchedule: schedule,
+        sharedNote: group.sharedNote ?? '',
       },
     })
   }
@@ -186,9 +193,15 @@ export default function TopPage() {
                     const badge = getStatusBadge(entry.administered)
                     return (
                       <div key={entry.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-2xl">
-                        <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-xl flex-shrink-0">
+                        {/* ペットアイコン（クリックでペット設定へ） */}
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/pets/${entry.petId}/edit`)}
+                          className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-xl flex-shrink-0 hover:ring-2 hover:ring-purple-400 transition-all"
+                          title={`${entry.petName}の設定を開く`}
+                        >
                           {entry.petIcon}
-                        </div>
+                        </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
                             <span className="text-xs font-bold text-purple-700">{entry.petName}</span>
