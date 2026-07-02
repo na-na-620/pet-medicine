@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -26,7 +26,10 @@ export default function MedicineSettingsPage() {
   const { petId, medicineId } = useParams()
   const isEdit = !!medicineId
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
+  // ペット設定画面から渡されたフォーム状態（戻るときにそのまま返す）
+  const { savedPetForm } = location.state ?? {}
   const fileRef = useRef()
 
   // 薬アイコン
@@ -233,7 +236,7 @@ export default function MedicineSettingsPage() {
 
     setSaving(false)
     if (err) { setError('保存に失敗しました'); return }
-    navigate(`/pets/${petId}/edit`)
+    navigate(`/pets/${petId}/edit`, { state: { savedPetForm } })
   }
 
   if (loading) return (
@@ -254,7 +257,7 @@ export default function MedicineSettingsPage() {
       <Header title={isEdit ? '薬設定（編集）' : '薬を新規登録'} />
 
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24">
-        <button onClick={() => navigate(`/pets/${petId}/edit`)} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 mb-4">
+        <button onClick={() => navigate(`/pets/${petId}/edit`, { state: { savedPetForm } })} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 mb-4">
           ← ペット設定へ戻る
         </button>
 

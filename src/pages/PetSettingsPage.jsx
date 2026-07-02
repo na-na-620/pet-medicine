@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -44,8 +44,11 @@ export default function PetSettingsPage() {
   const { petId } = useParams()
   const isEdit = !!petId
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
   const fileRef = useRef()
+  // 薬設定画面から戻ったときのフォーム状態復元用（マウント時の location.state を保持）
+  const initialLocState = useRef(location.state)
 
   const [name, setName] = useState('')
   // 誕生日：年・月・日に分けて管理（一桁ずつ編集しやすいように）
@@ -88,6 +91,35 @@ export default function PetSettingsPage() {
 
   useEffect(() => {
     if (!isEdit) return
+
+    const { savedPetForm } = initialLocState.current ?? {}
+    if (savedPetForm) {
+      // 薬設定画面から戻った場合：編集中のフォーム状態を復元する
+      setName(savedPetForm.name ?? '')
+      setBirthYear(savedPetForm.birthYear ?? '')
+      setBirthMonth(savedPetForm.birthMonth ?? '')
+      setBirthDay(savedPetForm.birthDay ?? '')
+      setWeight(savedPetForm.weight ?? '')
+      setInHeaven(savedPetForm.inHeaven ?? false)
+      setDeathYear(savedPetForm.deathYear ?? '')
+      setDeathMonth(savedPetForm.deathMonth ?? '')
+      setDeathDay(savedPetForm.deathDay ?? '')
+      setIconType(savedPetForm.iconType ?? 'emoji')
+      setSelectedEmoji(savedPetForm.selectedEmoji ?? '🐶')
+      if (savedPetForm.photoPreview) {
+        setPhotoPreview(savedPetForm.photoPreview)
+        setPhotoPublicUrl(savedPetForm.photoPublicUrl ?? null)
+        setPhotoPos(savedPetForm.photoPos ?? { x: 50, y: 50 })
+      }
+      // 薬一覧だけ最新データをDBから取得
+      supabase.from('medicines').select('*').eq('pet_id', petId).then(({ data }) => {
+        setMedicines(data ?? [])
+        setLoading(false)
+      })
+      window.history.replaceState({}, document.title)
+      return
+    }
+
     const fetchPet = async () => {
       const { data } = await supabase
         .from('pets')
@@ -199,6 +231,26 @@ export default function PetSettingsPage() {
     })
     e.preventDefault()
   }, [])
+
+  // 薬設定画面へ遷移するとき、現在のフォーム状態を location.state に保存しておく
+  // → 戻ったときに initialLocState から復元して編集内容を保持する
+  const navigateToMedicine = (path) => {
+    navigate(path, {
+      state: {
+        savedPetForm: {
+          name,
+          birthYear, birthMonth, birthDay,
+          weight, inHeaven,
+          deathYear, deathMonth, deathDay,
+          iconType, selectedEmoji,
+          // blob URL は遷移後に無効になるので public URL を優先して保持
+          photoPreview: photoPublicUrl ?? photoPreview,
+          photoPublicUrl,
+          photoPos,
+        }
+      }
+    })
+  }
 
   // 「旅立った子」トグル変更
   // ONにしたら：旅立ち日をクリア待ち表示 + すべての薬を投薬停止に
@@ -467,7 +519,7 @@ export default function PetSettingsPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-gray-700">登録済みの薬</h2>
               <button
-                onClick={() => navigate(`/pets/${petId}/medicines/new`)}
+                onClick={() => navigateToMedicine(`/pets/${petId}/medicines/new`)}
                 className="btn btn-secondary text-sm py-1.5 px-3"
               >
                 ＋ 薬を追加
@@ -483,7 +535,7 @@ export default function PetSettingsPage() {
                     <div key={med.id} className="card flex items-center gap-3">
                       {/* 薬アイコン */}
                       <button
-                        onClick={() => navigate(`/pets/${petId}/medicines/${med.id}/edit`)}
+                        onClick={() => navigateToMedicine(`/pets/${petId}/medicines/${med.id}/edit`)}
                         className="w-10 h-10 rounded-full overflow-hidden bg-amber-100 flex items-center justify-center text-2xl flex-shrink-0"
                       >
                         {medIcon.isPhoto
@@ -496,7 +548,7 @@ export default function PetSettingsPage() {
 
                       {/* 薬名・投薬量・タイミング */}
                       <button
-                        onClick={() => navigate(`/pets/${petId}/medicines/${med.id}/edit`)}
+                        onClick={() => navigateToMedicine(`/pets/${petId}/medicines/${med.id}/edit`)}
                         className="flex-1 text-left min-w-0"
                       >
                         <p className="text-sm font-bold text-gray-800">{med.name}</p>

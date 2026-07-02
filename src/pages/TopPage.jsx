@@ -47,13 +47,6 @@ const toLocalDateStr = (date) => {
   return `${y}-${m}-${d}`
 }
 
-// 薬を表示すべきかを判定
-// end_date が設定されている場合はその日まで表示（is_active に関わらず）
-// end_date がない場合は is_active で制御
-const shouldShowMedicine = (m, localDate) => {
-  if (m.end_date) return localDate <= m.end_date
-  return m.is_active
-}
 
 // トップ画面
 export default function TopPage() {
@@ -92,14 +85,17 @@ export default function TopPage() {
       const activeMedicines = medicines.filter((m) => {
         const pet = m.pets
         if (!pet) return false
-        // 薬の is_active / end_date による表示判定
-        if (!shouldShowMedicine(m, localDate)) return false
-        // お空の子：death_date 以降は表示しない
         if (pet.in_heaven) {
+          // お空の子：death_dateまでのみ表示（終了日当日を含む）
           if (!pet.death_date) return false
-          return localDate <= pet.death_date
+          if (localDate > pet.death_date) return false
+          // death_date内：薬のend_dateがあればその日まで、なければdeath_dateまで（is_active不問）
+          if (m.end_date) return localDate <= m.end_date
+          return true
         }
-        return true
+        // 通常ペット：end_dateがあればその日まで（終了日当日を含む）、なければis_activeで制御
+        if (m.end_date) return localDate <= m.end_date
+        return m.is_active
       })
 
       if (!activeMedicines.length) {
