@@ -50,9 +50,11 @@ const parseMedIcon = (iconValue) => {
 }
 
 // "HH:MM" を分に変換（時刻ソートのキー計算用）
+// 05:00 未満は深夜帯（翌日扱い）として +1440 し、晩などの 23 時以降より後に並ぶようにする
 const timeToMinutes = (t) => {
   const [h, m] = (t ?? '00:00').split(':').map(Number)
-  return h * 60 + (m || 0)
+  const mins = h * 60 + (m || 0)
+  return mins < 5 * 60 ? mins + 24 * 60 : mins
 }
 
 // Date オブジェクトをローカル日付文字列（YYYY-MM-DD）に変換
