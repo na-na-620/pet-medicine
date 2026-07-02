@@ -200,7 +200,7 @@ export default function PetListPage() {
                 {/* あたたかみのあるメッセージ */}
                 <div className="rounded-3xl border border-amber-100 bg-gradient-to-b from-amber-50/60 to-orange-50/30 px-5 pt-4 pb-5">
                   <p className="text-center text-xs text-amber-600/80 font-medium mb-4 leading-relaxed">
-                    虹の橋のたもとで、いつもそばにいるよ ✨
+                    虹の橋のたもとで、いつもそばにいるよ 🌈
                   </p>
                   <div className="flex flex-col gap-3">
                     {inHeavenPets.map((pet) => (

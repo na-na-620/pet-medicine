@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext'
 
 const TIMING_OPTIONS = ['朝', '昼', '晩', '食前', '食後', '起床時', '就寝前', 'その他']
 const DOSE_OPTIONS = ['全量（粉）', '全量（液体）', '半錠', '1/3', '2/3', '1錠', '1.5錠', '2錠', '3錠']
-const MED_ICONS = ['💊', '🧴', '💉', '🩹', '🩺', '🔬', '⚗️', '🫁']
+const MED_ICONS = ['💊', '💉', '🧴', '🫙', '🦟', '🩺', '🌡️', '💧']
+// 💊錠剤 💉注射/シリンジ 🧴液体薬 🫙粉薬 🦟防虫薬 🩺内科系 🌡️解熱系 💧点眼・点鼻薬
 
 // 薬アイコン値（JSON or URL or 絵文字）をパース
 const parseMedIcon = (iconValue) => {
@@ -334,7 +335,7 @@ export default function MedicineSettingsPage() {
 
             <div>
               <label className="label">薬名 <span className="text-red-400">*</span></label>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="アモキシシリン" required />
+              <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="アモキシシリン" />
             </div>
             <div>
               <label className="label">効能・メモ</label>

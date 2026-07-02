@@ -442,7 +442,7 @@ export default function PetSettingsPage() {
 
             <div>
               <label className="label">名前 <span className="text-red-400">*</span></label>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="ポチ" required />
+              <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="ポチ" />
             </div>
 
             {/* 誕生日：年・月・日を分けて入力 */}
