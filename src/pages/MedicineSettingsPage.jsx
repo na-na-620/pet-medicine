@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 const TIMING_OPTIONS = ['朝', '昼', '晩', '食前', '食後', '起床時', '就寝前', 'その他']
-const DOSE_OPTIONS = ['全量', '半錠', '1/3', '2/3', '1錠', '1.5錠', '2錠', '3錠']
+const DOSE_OPTIONS = ['全量（粉）', '全量（液体）', '半錠', '1/3', '2/3', '1錠', '1.5錠', '2錠', '3錠']
 const MED_ICONS = ['💊', '🧴', '💉', '🩹', '🩺', '🔬', '⚗️', '🫁']
 
 // 薬アイコン値（JSON or URL or 絵文字）をパース
@@ -412,7 +412,7 @@ export default function MedicineSettingsPage() {
               ))}
             </div>
 
-            {timings.map((timing) => {
+            {[...timings].sort((a, b) => TIMING_OPTIONS.indexOf(a) - TIMING_OPTIONS.indexOf(b)).map((timing) => {
               const ts = timeSettings[timing] ?? { type: 'point', start: '08:00', end: '08:00' }
               return (
                 <div key={timing} className="p-3 bg-gray-50 rounded-2xl mb-2">

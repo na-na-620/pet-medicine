@@ -4,6 +4,17 @@ import Header from '../components/Header'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
+// 薬のアイコン値（絵文字 or JSON写真）をパース
+const parseMedIcon = (iconValue) => {
+  if (!iconValue) return { isPhoto: false, emoji: '💊' }
+  try {
+    const p = JSON.parse(iconValue)
+    if (p.url) return { isPhoto: true, url: p.url, x: p.x ?? 50, y: p.y ?? 50 }
+  } catch {}
+  if (iconValue.startsWith('http') || iconValue.startsWith('/')) return { isPhoto: true, url: iconValue, x: 50, y: 50 }
+  return { isPhoto: false, emoji: iconValue }
+}
+
 const calcAge = (birthday) => {
   if (!birthday) return null
   const today = new Date()
@@ -36,7 +47,7 @@ export default function PetListPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('pets')
-      .select('*, medicines(id, name, is_active)')
+      .select('*, medicines(id, name, is_active, icon)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: true })
       .limit(30)
@@ -112,11 +123,19 @@ export default function PetListPage() {
           </div>
           {active.length > 0 ? (
             <div className="flex flex-wrap gap-1 mt-2">
-              {active.map((m) => (
-                <span key={m.id} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
-                  💊 {m.name}
-                </span>
-              ))}
+              {active.map((m) => {
+                const medIcon = parseMedIcon(m.icon)
+                return (
+                  <span key={m.id} className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+                    {medIcon.isPhoto ? (
+                      <img src={medIcon.url} alt="" className="w-3.5 h-3.5 rounded-full object-cover flex-shrink-0"
+                        style={{ objectPosition: `${medIcon.x}% ${medIcon.y}%` }}
+                        onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                    ) : medIcon.emoji}
+                    {m.name}
+                  </span>
+                )
+              })}
             </div>
           ) : (
             <p className="text-xs text-gray-400 mt-1">

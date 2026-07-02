@@ -171,6 +171,13 @@ export default function MedicationStatusPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-purple-700">{entry.petName}</span>
+                  <span className="inline-flex w-5 h-5 rounded-full overflow-hidden bg-amber-100 items-center justify-center text-xs flex-shrink-0">
+                    {entry.medIcon?.isPhoto ? (
+                      <img src={entry.medIcon.url} alt="" className="w-full h-full object-cover"
+                        style={{ objectPosition: `${entry.medIcon.x}% ${entry.medIcon.y}%` }}
+                        onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                    ) : (entry.medIcon?.emoji ?? '💊')}
+                  </span>
                   <span className="text-sm font-bold text-gray-800">{entry.medicineName}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -235,7 +242,7 @@ export default function MedicationStatusPage() {
           {saving ? '保存中...' : '投薬状況を保存する'}
         </button>
 
-        <button onClick={() => navigate(-1)} className="btn btn-secondary w-full">
+        <button onClick={() => navigate('/', { state: { returnDate: date }, replace: true })} className="btn btn-secondary w-full">
           キャンセル
         </button>
       </main>

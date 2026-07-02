@@ -112,10 +112,12 @@ export default function PetSettingsPage() {
         setPhotoPos(savedPetForm.photoPos ?? { x: 50, y: 50 })
       }
       // 薬一覧だけ最新データをDBから取得
-      supabase.from('medicines').select('*').eq('pet_id', petId).then(({ data }) => {
-        setMedicines(data ?? [])
-        setLoading(false)
-      })
+      supabase.from('medicines').select('*').eq('pet_id', petId)
+        .order('created_at', { ascending: true })
+        .then(({ data }) => {
+          setMedicines(data ?? [])
+          setLoading(false)
+        })
       window.history.replaceState({}, document.title)
       return
     }
@@ -152,7 +154,7 @@ export default function PetSettingsPage() {
           setIconType('emoji')
           setSelectedEmoji(icon.emoji ?? '🐶')
         }
-        setMedicines(data.medicines ?? [])
+        setMedicines((data.medicines ?? []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)))
       }
       setLoading(false)
     }
@@ -463,7 +465,7 @@ export default function PetSettingsPage() {
 
             <div>
               <label className="label">体重（kg）</label>
-              <input className="input" type="number" step="0.1" min="0" value={weight}
+              <input className="input" type="number" step="0.01" min="0" value={weight}
                 onChange={(e) => setWeight(e.target.value)} placeholder="3.5" />
             </div>
           </div>

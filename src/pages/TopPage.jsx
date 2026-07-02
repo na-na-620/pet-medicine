@@ -38,6 +38,17 @@ const parsePetIcon = (iconType, iconValue) => {
   }
 }
 
+// 薬のアイコン値（絵文字 or JSON写真）をパース
+const parseMedIcon = (iconValue) => {
+  if (!iconValue) return { isPhoto: false, emoji: '💊' }
+  try {
+    const p = JSON.parse(iconValue)
+    if (p.url) return { isPhoto: true, url: p.url, x: p.x ?? 50, y: p.y ?? 50 }
+  } catch {}
+  if (iconValue.startsWith('http') || iconValue.startsWith('/')) return { isPhoto: true, url: iconValue, x: 50, y: 50 }
+  return { isPhoto: false, emoji: iconValue }
+}
+
 // Date オブジェクトをローカル日付文字列（YYYY-MM-DD）に変換
 // UTC変換によるタイムゾーンずれを回避するため、ローカルの年月日を使用
 const toLocalDateStr = (date) => {
@@ -67,7 +78,7 @@ export default function TopPage() {
     try {
       const { data: medicines, error } = await supabase
         .from('medicines')
-        .select('id, name, efficacy, timings, time_settings, dose_amount, interval_hours, is_active, end_date, pets(id, name, icon_type, icon_value, in_heaven, death_date)')
+        .select('id, name, icon, efficacy, timings, time_settings, dose_amount, interval_hours, is_active, end_date, pets(id, name, icon_type, icon_value, in_heaven, death_date)')
 
       if (error || !medicines?.length) {
         if (epoch !== fetchEpochRef.current) return
@@ -139,6 +150,7 @@ export default function TopPage() {
             petIcon,
             medicineId: med.id,
             medicineName: med.name,
+            medIcon: parseMedIcon(med.icon),
             efficacy: med.efficacy ?? '',
             doseAmount: med.dose_amount ?? '1錠',
             administered: log?.administered_percent ?? 0,
@@ -286,6 +298,13 @@ export default function TopPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
                             <span className="text-xs font-bold text-purple-700">{entry.petName}</span>
+                            <span className="inline-flex w-5 h-5 rounded-full overflow-hidden bg-amber-100 items-center justify-center text-xs flex-shrink-0">
+                              {entry.medIcon.isPhoto ? (
+                                <img src={entry.medIcon.url} alt="" className="w-full h-full object-cover"
+                                  style={{ objectPosition: `${entry.medIcon.x}% ${entry.medIcon.y}%` }}
+                                  onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                              ) : entry.medIcon.emoji}
+                            </span>
                             <span className="text-sm font-bold text-gray-800">{entry.medicineName}</span>
                             <span className="text-xs text-gray-400">{entry.efficacy}</span>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>
