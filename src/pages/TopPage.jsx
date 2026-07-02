@@ -6,7 +6,7 @@ import PillBar from '../components/PillBar'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-const TIMING_ORDER = ['朝', '昼', '晩', '食前', '食後', '起床時', '就寝前', 'その他']
+const TIMING_ORDER = ['朝', '昼', '晩', 'その他']
 
 const getStatusBadge = (pct) => {
   if (pct >= 100) return { label: '投薬済み', cls: 'bg-emerald-100 text-emerald-700' }
@@ -166,6 +166,7 @@ export default function TopPage() {
             timeType: ts.type ?? 'point',
             timeStart: ts.start ?? '08:00',
             timeEnd: ts.end ?? '08:00',
+            meal: ts.meal ?? '',
             note: log?.note ?? '',
           })
         })
@@ -326,7 +327,9 @@ export default function TopPage() {
                               {badge.label}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-400 mb-1.5">投薬時間：{formatTime(entry)}</p>
+                          <p className="text-xs text-gray-400 mb-1.5">
+                            投薬時間：{formatTime(entry)}{entry.meal && <span className="ml-1 text-purple-400">{entry.meal}</span>}
+                          </p>
                           <PillBar doseAmount={entry.doseAmount} administered={entry.administered} showLabel />
                         </div>
                       </div>

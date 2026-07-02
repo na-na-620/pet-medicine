@@ -4,7 +4,8 @@ import Header from '../components/Header'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-const TIMING_OPTIONS = ['朝', '昼', '晩', '食前', '食後', '起床時', '就寝前', 'その他']
+const TIMING_OPTIONS = ['朝', '昼', '晩', 'その他']
+const MEAL_TIMINGS = ['朝', '昼', '晩']
 const DOSE_OPTIONS = ['全量（粉）', '全量（液体）', '半錠', '1/3', '2/3', '1錠', '1.5錠', '2錠', '3錠']
 const MED_ICONS = ['💊', '💉', '🧴', '🫙', '🦟', '🩺', '🌡️', '💧']
 // 💊錠剤 💉注射/シリンジ 🧴液体薬 🫙粉薬 🦟防虫薬 🩺内科系 🌡️解熱系 💧点眼・点鼻薬
@@ -447,6 +448,24 @@ export default function MedicineSettingsPage() {
                       <span className="text-gray-400">〜</span>
                       <input type="time" className="input" style={{ maxWidth: 120 }}
                         value={ts.end} onChange={(e) => updateTimeSetting(timing, 'end', e.target.value)} />
+                    </div>
+                  )}
+                  {MEAL_TIMINGS.includes(timing) && (
+                    <div className="mt-2 flex items-center gap-4 flex-wrap">
+                      <span className="text-xs text-gray-500 w-10 flex-shrink-0">食事</span>
+                      {[{ val: '', label: '指定なし' }, { val: '食前', label: '食前' }, { val: '食後', label: '食後' }].map(({ val, label }) => (
+                        <label key={val} className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
+                          <input
+                            type="radio"
+                            name={`meal-${timing}`}
+                            value={val}
+                            checked={(ts.meal ?? '') === val}
+                            onChange={() => updateTimeSetting(timing, 'meal', val)}
+                            className="accent-purple-600"
+                          />
+                          {label}
+                        </label>
+                      ))}
                     </div>
                   )}
                 </div>
