@@ -49,6 +49,12 @@ const parseMedIcon = (iconValue) => {
   return { isPhoto: false, emoji: iconValue }
 }
 
+// "HH:MM" を分に変換（時刻ソートのキー計算用）
+const timeToMinutes = (t) => {
+  const [h, m] = (t ?? '00:00').split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
 // Date オブジェクトをローカル日付文字列（YYYY-MM-DD）に変換
 // UTC変換によるタイムゾーンずれを回避するため、ローカルの年月日を使用
 const toLocalDateStr = (date) => {
@@ -163,14 +169,17 @@ export default function TopPage() {
         })
       })
 
-      // タイミング順にソート
-      const newSchedule = []
-      TIMING_ORDER.forEach((t) => {
-        if (timingMap[t]) newSchedule.push({ timing: t, entries: timingMap[t], sharedNote: sharedNoteByTiming[t] ?? '' })
-      })
-      Object.keys(timingMap).forEach((t) => {
-        if (!TIMING_ORDER.includes(t)) newSchedule.push({ timing: t, entries: timingMap[t], sharedNote: sharedNoteByTiming[t] ?? '' })
-      })
+      // 投薬時刻順にソート（グループ内で最も早い timeStart 基準、同時刻は TIMING_ORDER 順でタイブレーク）
+      const newSchedule = Object.entries(timingMap)
+        .map(([t, entries]) => ({ timing: t, entries, sharedNote: sharedNoteByTiming[t] ?? '' }))
+        .sort((a, b) => {
+          const aMin = Math.min(...a.entries.map((e) => timeToMinutes(e.timeStart)))
+          const bMin = Math.min(...b.entries.map((e) => timeToMinutes(e.timeStart)))
+          if (aMin !== bMin) return aMin - bMin
+          const aOrd = TIMING_ORDER.indexOf(a.timing)
+          const bOrd = TIMING_ORDER.indexOf(b.timing)
+          return (aOrd === -1 ? 99 : aOrd) - (bOrd === -1 ? 99 : bOrd)
+        })
 
       if (epoch !== fetchEpochRef.current) return
       setSchedule(newSchedule)
