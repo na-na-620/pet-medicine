@@ -181,7 +181,8 @@ export default function PetSettingsPage() {
         ? '写真のアップロードに失敗しました。Supabase Storageの「pet-icons」バケットとアップロードポリシーが設定されているか確認してください。'
         : `写真のアップロードに失敗しました（${uploadErr.message}）。Storage設定を確認してください。`
       setError(msg)
-      setIconType('emoji')
+      // アップロード失敗時はプレビューを元の公開URLに戻す（既存写真があれば保持、なければnull）
+      setPhotoPreview(photoPublicUrl ?? null)
       setUploading(false)
       return
     }
