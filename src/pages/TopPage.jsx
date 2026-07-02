@@ -173,7 +173,11 @@ export default function TopPage() {
 
       // 投薬時刻順にソート（グループ内で最も早い timeStart 基準、同時刻は TIMING_ORDER 順でタイブレーク）
       const newSchedule = Object.entries(timingMap)
-        .map(([t, entries]) => ({ timing: t, entries, sharedNote: sharedNoteByTiming[t] ?? '' }))
+        .map(([t, entries]) => ({
+          timing: t,
+          entries: [...entries].sort((a, b) => timeToMinutes(a.timeStart) - timeToMinutes(b.timeStart)),
+          sharedNote: sharedNoteByTiming[t] ?? '',
+        }))
         .sort((a, b) => {
           const aMin = Math.min(...a.entries.map((e) => timeToMinutes(e.timeStart)))
           const bMin = Math.min(...b.entries.map((e) => timeToMinutes(e.timeStart)))
