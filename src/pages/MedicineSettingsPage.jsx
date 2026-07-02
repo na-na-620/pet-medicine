@@ -46,9 +46,18 @@ export default function MedicineSettingsPage() {
   const [doseAmount, setDoseAmount] = useState('1錠')
   const [intervalHours, setIntervalHours] = useState('8')
   const [isActive, setIsActive] = useState(true)
+  // 投薬終了日：年・月・日に分けて管理
+  const [endYear,  setEndYear]  = useState('')
+  const [endMonth, setEndMonth] = useState('')
+  const [endDay,   setEndDay]   = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(isEdit)
+
+  // 結合した投薬終了日（YYYY-MM-DD）
+  const endDate = endYear && endMonth && endDay
+    ? `${String(endYear).padStart(4, '0')}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`
+    : ''
 
   useEffect(() => {
     if (!isEdit) return
@@ -72,6 +81,12 @@ export default function MedicineSettingsPage() {
         setDoseAmount(data.dose_amount ?? '1錠')
         setIntervalHours(data.interval_hours?.toString() ?? '8')
         setIsActive(data.is_active ?? true)
+        if (data.end_date) {
+          const [y, m, d] = data.end_date.split('-')
+          setEndYear(y)
+          setEndMonth(String(parseInt(m, 10)))
+          setEndDay(String(parseInt(d, 10)))
+        }
       }
       setLoading(false)
     }
@@ -205,6 +220,8 @@ export default function MedicineSettingsPage() {
       dose_amount: doseAmount,
       interval_hours: parseFloat(intervalHours) || 8,
       is_active: isActive,
+      // 投薬中に戻した場合はend_dateをクリア、停止中の場合のみend_dateを保存
+      end_date: !isActive && endDate ? endDate : null,
     }
 
     let err
@@ -350,6 +367,27 @@ export default function MedicineSettingsPage() {
                 <span className="toggle-slider" />
               </label>
             </div>
+
+            {/* 投薬終了日（投薬中OFFのときのみ表示） */}
+            {!isActive && (
+              <div className="bg-gray-50 rounded-2xl px-4 py-3">
+                <p className="text-xs font-medium text-gray-500 mb-2">投薬終了日</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input type="number" inputMode="numeric" className="input text-center" style={{ maxWidth: 80 }}
+                    placeholder="2025" value={endYear} onChange={(e) => setEndYear(e.target.value)} />
+                  <span className="text-gray-400 text-sm">年</span>
+                  <input type="number" inputMode="numeric" className="input text-center" style={{ maxWidth: 60 }}
+                    placeholder="1" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} min="1" max="12" />
+                  <span className="text-gray-400 text-sm">月</span>
+                  <input type="number" inputMode="numeric" className="input text-center" style={{ maxWidth: 60 }}
+                    placeholder="1" value={endDay} onChange={(e) => setEndDay(e.target.value)} min="1" max="31" />
+                  <span className="text-gray-400 text-sm">日</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  入力するとこの日までトップ画面に投薬予定が残ります
+                </p>
+              </div>
+            )}
           </div>
 
           {/* 投薬タイミング・時間設定 */}

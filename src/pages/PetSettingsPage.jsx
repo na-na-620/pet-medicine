@@ -254,6 +254,17 @@ export default function PetSettingsPage() {
       ({ error: err } = await supabase.from('pets').insert(payload))
     }
 
+    if (!err && isEdit && inHeaven && deathDate) {
+      // お空の子として保存する場合、すべての薬を停止にして旅立ち日を終了日に設定
+      const { error: medErr } = await supabase
+        .from('medicines')
+        .update({ is_active: false, end_date: deathDate })
+        .eq('pet_id', petId)
+      if (!medErr) {
+        setMedicines((prev) => prev.map((m) => ({ ...m, is_active: false, end_date: deathDate })))
+      }
+    }
+
     setSaving(false)
     if (err) { setError('保存に失敗しました'); return }
     navigate('/pets')

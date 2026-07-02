@@ -38,6 +38,23 @@ const parsePetIcon = (iconType, iconValue) => {
   }
 }
 
+// Date オブジェクトをローカル日付文字列（YYYY-MM-DD）に変換
+// UTC変換によるタイムゾーンずれを回避するため、ローカルの年月日を使用
+const toLocalDateStr = (date) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+// 薬を表示すべきかを判定
+// end_date が設定されている場合はその日まで表示（is_active に関わらず）
+// end_date がない場合は is_active で制御
+const shouldShowMedicine = (m, localDate) => {
+  if (m.end_date) return localDate <= m.end_date
+  return m.is_active
+}
+
 // トップ画面
 export default function TopPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -47,42 +64,52 @@ export default function TopPage() {
   const location = useLocation()
   const { user } = useAuth()
   const lastLoadedDate = useRef('')
+  // フェッチ競合防止用エポック：新しいフェッチが始まると古いfetchの結果を破棄する
+  const fetchEpochRef = useRef(0)
 
   // ===== DBからスケジュールを取得 =====
   const fetchSchedule = async (date) => {
+    const epoch = ++fetchEpochRef.current
     setLoading(true)
     try {
-      // 全薬を取得（is_active フィルタはJSで行う）
       const { data: medicines, error } = await supabase
         .from('medicines')
-        .select('id, name, efficacy, timings, time_settings, dose_amount, interval_hours, is_active, pets(id, name, icon_type, icon_value, in_heaven, death_date)')
+        .select('id, name, efficacy, timings, time_settings, dose_amount, interval_hours, is_active, end_date, pets(id, name, icon_type, icon_value, in_heaven, death_date)')
 
       if (error || !medicines?.length) {
+        if (epoch !== fetchEpochRef.current) return
         setSchedule([])
         setLoading(false)
         return
       }
 
+      // medication_logs はUTCベースで保存されているのでUTC文字列で照合
       const logDate = date.toISOString().slice(0, 10)
+      // death_date / end_date はユーザー入力のカレンダー日付なのでローカル日付で比較
+      const localDate = toLocalDateStr(date)
 
       // 表示対象の薬を絞り込む
-      // - 通常ペット: is_active = true のみ
-      // - お空の子:   death_date が設定されており、selectedDate <= death_date の日付なら表示
       const activeMedicines = medicines.filter((m) => {
         const pet = m.pets
         if (!pet) return false
-        if (!pet.in_heaven) return m.is_active
-        if (!pet.death_date) return false
-        return logDate <= pet.death_date
+        // 薬の is_active / end_date による表示判定
+        if (!shouldShowMedicine(m, localDate)) return false
+        // お空の子：death_date 以降は表示しない
+        if (pet.in_heaven) {
+          if (!pet.death_date) return false
+          return localDate <= pet.death_date
+        }
+        return true
       })
 
       if (!activeMedicines.length) {
+        if (epoch !== fetchEpochRef.current) return
         setSchedule([])
         setLoading(false)
         return
       }
 
-      // 対象日の投薬ログを取得（shared_noteも含む）
+      // 対象日の投薬ログを取得
       const { data: logs } = await supabase
         .from('medication_logs')
         .select('medicine_id, timing, administered_percent, note, shared_note')
@@ -137,11 +164,14 @@ export default function TopPage() {
         if (!TIMING_ORDER.includes(t)) newSchedule.push({ timing: t, entries: timingMap[t], sharedNote: sharedNoteByTiming[t] ?? '' })
       })
 
+      if (epoch !== fetchEpochRef.current) return
       setSchedule(newSchedule)
+      setLoading(false)
     } catch {
+      if (epoch !== fetchEpochRef.current) return
       setSchedule([])
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   // 日付変更時のみDBから再取得
@@ -153,28 +183,33 @@ export default function TopPage() {
   }, [selectedDate])
 
   // MedicationStatusPageから戻った時の処理
-  // returnDate: 表示を戻すべき日付
-  // updatedSchedule: 保存後のスケジュール全体（ある場合はDB再取得不要）
+  // ※ このeffectは日付effectより後に定義されているため、同一レンダーでは後に実行される
+  //   fetchEpochRef をインクリメントすることで、日付effectが起動した古いfetchをキャンセルできる
   useEffect(() => {
     const { updatedSchedule, returnDate } = location.state ?? {}
     if (!updatedSchedule && !returnDate) return
+
+    // 進行中のフェッチをキャンセル（再マウント直後の今日分フェッチによる上書きを防ぐ）
+    fetchEpochRef.current++
 
     if (returnDate) {
       const d = new Date(returnDate)
       setSelectedDate(d)
       if (updatedSchedule) {
-        // 保存後：スケジュールを直接反映し、DB再取得を防ぐ
+        // 保存後：スケジュールを直接反映しDB再取得を行わない
         setSchedule(updatedSchedule)
+        setLoading(false)
         lastLoadedDate.current = d.toDateString()
+      } else {
+        // 戻るボタンの場合：lastLoadedDate をリセットして日付effectにDB再取得させる
+        lastLoadedDate.current = ''
       }
-      // 戻るボタンの場合（updatedScheduleなし）：
-      // lastLoadedDateを更新しないので、日付変更effectがDB再取得を行う
     }
 
     window.history.replaceState({}, document.title)
   }, [location.state])
 
-  // 投薬状況登録画面へ遷移（shared_noteも含めてスケジュール全体を渡す）
+  // 投薬状況登録画面へ遷移
   const handleRegister = (group) => {
     navigate('/medication-status', {
       state: {
